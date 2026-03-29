@@ -24,7 +24,7 @@ fun HistoryScreen(
     viewModel: CalculatorViewModel,
     onNavigateBack: () -> Unit
 ) {
-    val history by viewModel.history.collectAsState()
+    val history = viewModel.history
     var showConfirmDialog by remember { mutableStateOf(false) }
 
     if (showConfirmDialog) {

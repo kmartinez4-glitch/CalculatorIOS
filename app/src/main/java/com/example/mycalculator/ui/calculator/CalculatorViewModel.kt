@@ -1,9 +1,8 @@
 package com.example.mycalculator.ui.calculator
 
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 data class CalculatorState(
     val display: String = "0",
@@ -12,118 +11,134 @@ data class CalculatorState(
 
 class CalculatorViewModel : ViewModel() {
 
-    private val _state = MutableStateFlow(CalculatorState())
-    val state: StateFlow<CalculatorState> = _state.asStateFlow()
+    var state = mutableStateOf(CalculatorState())
+        private set
 
-    private val _history = MutableStateFlow<List<String>>(emptyList())
-    val history: StateFlow<List<String>> = _history.asStateFlow()
+    val history = mutableStateListOf<String>()
 
-    private var firstNumber: Double? = null
-    private var operator: String? = null
+    private val numbers = mutableListOf<Double>()
+    private val operators = mutableListOf<String>()
+
     private var isNewNumber = true
     private var hasDecimal = false
+    private var lastWasEquals = false
 
     fun onNumberClick(number: String) {
+        if (lastWasEquals) {
+            numbers.clear()
+            operators.clear()
+            lastWasEquals = false
+            state.value = CalculatorState()
+        }
         if (isNewNumber) {
-            _state.value = _state.value.copy(display = number)
+            state.value = state.value.copy(display = number)
             isNewNumber = false
             hasDecimal = false
         } else {
-            val current = _state.value.display
+            val current = state.value.display
             if (current == "0" && number != ".") {
-                _state.value = _state.value.copy(display = number)
+                state.value = state.value.copy(display = number)
             } else {
-                _state.value = _state.value.copy(display = current + number)
+                state.value = state.value.copy(display = current + number)
             }
         }
     }
 
     fun onDecimalClick() {
+        if (lastWasEquals) {
+            numbers.clear()
+            operators.clear()
+            lastWasEquals = false
+            state.value = CalculatorState()
+        }
         if (isNewNumber) {
-            _state.value = _state.value.copy(display = "0.")
+            state.value = state.value.copy(display = "0.")
             isNewNumber = false
             hasDecimal = true
             return
         }
         if (!hasDecimal) {
-            _state.value = _state.value.copy(display = _state.value.display + ".")
+            state.value = state.value.copy(display = state.value.display + ".")
             hasDecimal = true
         }
     }
 
     fun onOperatorClick(op: String) {
-        val currentNumber = _state.value.display.toDoubleOrNull() ?: return
+        val currentNumber = state.value.display.toDoubleOrNull() ?: return
 
-        if (firstNumber != null && operator != null && !isNewNumber) {
-            val result = calculate(firstNumber!!, currentNumber, operator!!)
-            if (result == null) {
-                showError()
-                return
-            }
-            firstNumber = result
-            _state.value = _state.value.copy(
-                display = formatResult(result),
-                expression = "${formatResult(result)} $op"
-            )
+        if (isNewNumber && operators.isNotEmpty()) {
+            // Solo reemplaza el último operador, no agrega nada
+            operators[operators.size - 1] = op
         } else {
-            firstNumber = currentNumber
-            _state.value = _state.value.copy(
-                expression = "${formatResult(currentNumber)} $op"
-            )
+            // Agrega el número actual y el operador nuevo
+            numbers.add(currentNumber)
+            operators.add(op)
+            isNewNumber = true
+            hasDecimal = false
         }
 
-        operator = op
-        isNewNumber = true
-        hasDecimal = false
+        val expr = buildExpression()
+        state.value = state.value.copy(expression = expr)
     }
 
     fun onEqualsClick() {
-        val secondNumber = _state.value.display.toDoubleOrNull() ?: return
-        val op = operator ?: return
-        val first = firstNumber ?: return
+        val currentNumber = state.value.display.toDoubleOrNull() ?: return
+        if (operators.isEmpty()) return
 
-        val result = calculate(first, secondNumber, op)
+        numbers.add(currentNumber)
+
+        val expressionText = buildExpressionFull()
+
+        val result = evaluateWithPrecedence(
+            numbers.toMutableList(),
+            operators.toMutableList()
+        )
+
         if (result == null) {
             showError()
             return
         }
 
-        val entry = "${formatResult(first)} $op ${formatResult(secondNumber)} = ${formatResult(result)}"
-        _history.value = _history.value + entry
+        val entry = "$expressionText = ${formatResult(result)}"
+        history.add(0, entry)
 
-        _state.value = _state.value.copy(
+        state.value = state.value.copy(
             display = formatResult(result),
             expression = entry
         )
 
-        firstNumber = null
-        operator = null
+        numbers.clear()
+        operators.clear()
+        numbers.add(result)
         isNewNumber = true
         hasDecimal = false
+        lastWasEquals = true
     }
 
-    fun onClearClick() {
-        firstNumber = null
-        operator = null
-        isNewNumber = true
-        hasDecimal = false
-        _state.value = CalculatorState()
-    }
+    private fun evaluateWithPrecedence(
+        nums: MutableList<Double>,
+        ops: MutableList<String>
+    ): Double? {
+        // Paso 1: resolver × y ÷ primero
+        var i = 0
+        while (i < ops.size) {
+            if (ops[i] == "×" || ops[i] == "÷") {
+                val result = calculate(nums[i], nums[i + 1], ops[i]) ?: return null
+                nums[i] = result
+                nums.removeAt(i + 1)
+                ops.removeAt(i)
+            } else {
+                i++
+            }
+        }
 
-    fun onPlusMinusClick() {
-        val current = _state.value.display.toDoubleOrNull() ?: return
-        val toggled = current * -1
-        _state.value = _state.value.copy(display = formatResult(toggled))
-    }
+        // Paso 2: resolver + y -
+        var result = nums[0]
+        for (j in ops.indices) {
+            result = calculate(result, nums[j + 1], ops[j]) ?: return null
+        }
 
-    fun onPercentClick() {
-        val current = _state.value.display.toDoubleOrNull() ?: return
-        val result = current / 100
-        _state.value = _state.value.copy(display = formatResult(result))
-    }
-
-    fun onClearHistory() {
-        _history.value = emptyList()
+        return result
     }
 
     private fun calculate(a: Double, b: Double, op: String): Double? {
@@ -136,6 +151,53 @@ class CalculatorViewModel : ViewModel() {
         }
     }
 
+    // Para mostrar mientras el usuario escribe (incluye operador al final)
+    private fun buildExpression(): String {
+        val sb = StringBuilder()
+        for (i in numbers.indices) {
+            sb.append(formatResult(numbers[i]))
+            if (i < operators.size) {
+                sb.append(" ${operators[i]} ")
+            }
+        }
+        return sb.toString().trimEnd()
+    }
+
+    // Para guardar en historial (todos los números completos)
+    private fun buildExpressionFull(): String {
+        val sb = StringBuilder()
+        for (i in numbers.indices) {
+            sb.append(formatResult(numbers[i]))
+            if (i < operators.size) {
+                sb.append(" ${operators[i]} ")
+            }
+        }
+        return sb.toString().trimEnd()
+    }
+
+    fun onClearClick() {
+        numbers.clear()
+        operators.clear()
+        isNewNumber = true
+        hasDecimal = false
+        lastWasEquals = false
+        state.value = CalculatorState()
+    }
+
+    fun onPlusMinusClick() {
+        val current = state.value.display.toDoubleOrNull() ?: return
+        state.value = state.value.copy(display = formatResult(current * -1))
+    }
+
+    fun onPercentClick() {
+        val current = state.value.display.toDoubleOrNull() ?: return
+        state.value = state.value.copy(display = formatResult(current / 100))
+    }
+
+    fun onClearHistory() {
+        history.clear()
+    }
+
     private fun formatResult(value: Double): String {
         return if (value == value.toLong().toDouble()) {
             value.toLong().toString()
@@ -145,9 +207,10 @@ class CalculatorViewModel : ViewModel() {
     }
 
     private fun showError() {
-        _state.value = _state.value.copy(display = "Error", expression = "")
-        firstNumber = null
-        operator = null
+        state.value = state.value.copy(display = "Error", expression = "")
+        numbers.clear()
+        operators.clear()
         isNewNumber = true
+        lastWasEquals = false
     }
 }

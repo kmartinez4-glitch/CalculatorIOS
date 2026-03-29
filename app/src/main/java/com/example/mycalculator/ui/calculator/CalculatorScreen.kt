@@ -30,7 +30,7 @@ fun CalculatorScreen(
     viewModel: CalculatorViewModel,
     onNavigateToHistory: () -> Unit
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state
 
     Column(
         modifier = Modifier
