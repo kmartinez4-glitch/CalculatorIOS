@@ -119,7 +119,7 @@ class CalculatorViewModel : ViewModel() {
         nums: MutableList<Double>,
         ops: MutableList<String>
     ): Double? {
-        // Paso 1: resolver × y ÷ primero
+        //aplicacio gerarquia de operadores
         var i = 0
         while (i < ops.size) {
             if (ops[i] == "×" || ops[i] == "÷") {
@@ -151,7 +151,7 @@ class CalculatorViewModel : ViewModel() {
         }
     }
 
-    // Para mostrar mientras el usuario escribe (incluye operador al final)
+
     private fun buildExpression(): String {
         val sb = StringBuilder()
         for (i in numbers.indices) {
@@ -163,7 +163,7 @@ class CalculatorViewModel : ViewModel() {
         return sb.toString().trimEnd()
     }
 
-    // Para guardar en historial (todos los números completos)
+    // guarda el hiostorial
     private fun buildExpressionFull(): String {
         val sb = StringBuilder()
         for (i in numbers.indices) {
