@@ -67,10 +67,10 @@ class CalculatorViewModel : ViewModel() {
         val currentNumber = state.value.display.toDoubleOrNull() ?: return
 
         if (isNewNumber && operators.isNotEmpty()) {
-            // Solo reemplaza el último operador, no agrega nada
+
             operators[operators.size - 1] = op
         } else {
-            // Agrega el número actual y el operador nuevo
+
             numbers.add(currentNumber)
             operators.add(op)
             isNewNumber = true
@@ -132,7 +132,6 @@ class CalculatorViewModel : ViewModel() {
             }
         }
 
-        // Paso 2: resolver + y -
         var result = nums[0]
         for (j in ops.indices) {
             result = calculate(result, nums[j + 1], ops[j]) ?: return null
